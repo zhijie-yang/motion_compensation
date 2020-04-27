@@ -9,6 +9,8 @@ add_compile_options(-std=c++11)
 ## is used, also find other catkin packages
 
 #set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} ".")
+set(OpenCV_DIR "/usr/share/OpenCV")
+
 
 find_package(catkin REQUIRED COMPONENTS
         pcl_conversions
@@ -20,6 +22,7 @@ find_package(catkin REQUIRED COMPONENTS
         eigen_conversions
         tf_conversions
         tf
+        OpenCV REQUIRED
         )
 
 ## System dependencies are found with CMake's conventions

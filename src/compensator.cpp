@@ -5,11 +5,10 @@
 #include <ros/ros.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <message_filters/subscriber.h>
-#include <tf2_ros/transform_listener.h>
+#include <tf/transform_listener.h>
 #include <geometry_msgs/TransformStamped.h>
 #include <geometry_msgs/Twist.h>
 #include <tf/transform_datatypes.h>
-#include <tf2_eigen/tf2_eigen.h>
 #include <tf_conversions/tf_eigen.h>
 #include <tf/tf.h>
 #include <tf/transform_datatypes.h>
@@ -29,9 +28,6 @@
 
 std::vector<geometry_msgs::TransformStamped> tfVec;
 
-std::vector<pcl::PointCloud<pcl::PointXYZI>> rings_cloud;
-pcl::PointCloud<pcl::PointXYZI>::Ptr cloud1d(new pcl::PointCloud<pcl::PointXYZI>);
-
 std::vector<ros::Time> vec_tf_time;
 std::map<ros::Time, tf::StampedTransform > tf_map;
 
@@ -45,13 +41,13 @@ ros::Publisher compensated_cloud_publisher;
  */
 void Compensator::onlineCompensate(const stamped_scan_msgs::Scan& _cloud, const std::vector<tf::StampedTransform>& _tf_vec)
 {
-    TransformExpr tf_expr = Interpolator::fitTrajectory(_tf_vec);
+    TransformExpr tf_expr = Interpolator::fitTrajectory(_tf_vec, this->base_time);
     tf::StampedTransform local_world;
-    local_world = Interpolator::forwardInterpolate(tf_expr, _cloud.header.stamp);
+    local_world = Interpolator::interpolate(tf_expr, _cloud.header.stamp);
     pcl::PointCloud<pcl::PointXYZI> ret;
     for (auto point : _cloud.points)
     {
-        tf::StampedTransform tf = Interpolator::forwardInterpolate(tf_expr, point.time_stamp);
+        tf::StampedTransform tf = Interpolator::interpolate(tf_expr, point.time_stamp);
         pcl::PointXYZI p;
         p.x = point.position.x; p.y = point.position.y; p.z = point.position.z; p.intensity = point.intensity;
         ret.push_back(applyTransform(applyTransform (p, tf_strip_stamp(tf)), local_world.inverse()));
@@ -95,6 +91,11 @@ pcl::PointXYZI Compensator::applyTransform(pcl::PointXYZI p, tf::Transform tf)
     return ret;
 }
 
+Compensator::Compensator(ros::Time base_time)
+{
+    this->base_time = base_time;
+}
+
 void point_cloud_callback (const sensor_msgs::PointCloud2ConstPtr &pc)
 {
 //    pointCloudBuf.push_back(pc);
@@ -102,15 +103,6 @@ void point_cloud_callback (const sensor_msgs::PointCloud2ConstPtr &pc)
     pcl::PCLPointCloud2 pclPoints;
     pcl_conversions::toPCL(*pc, pclPoints);
     int ring = 10;
-    std::cerr << "Length: " << rings_cloud[ring].size() << std::endl;
-
-    for (ring = 0; ring < 16; ring += 1)
-    {
-        std::cerr << "ring: " << ring << ", pitch: "  << calc_pitch(rings_cloud[ring][0]) << ", length: " << rings_cloud[ring].size() << std::endl;
-        std::cerr << "smallest azimuth: " << calc_azimuth(rings_cloud[ring][0]) << ", greatest azimuth: " <<
-            calc_azimuth(rings_cloud[ring][rings_cloud[ring].size()-1]) << std::endl;
-    }
-
 }
 
 
@@ -120,8 +112,6 @@ int main (int argc, char **argv)
     ros::NodeHandle n;
     ros::Subscriber sub = n.subscribe("/velodyne_points", 1000, point_cloud_callback);
 
-    tf2_ros::Buffer tfBuffer;
-    tf2_ros::TransformListener tfListener(tfBuffer);
 
     compensated_cloud_publisher = n.advertise<sensor_msgs::PointCloud2>("/undistorted_points", 1);
 
@@ -129,7 +119,7 @@ int main (int argc, char **argv)
 
     ros::spin();
 
-
+/*
 //    ros::Rate rate(10.0);
 //    geometry_msgs::TransformStamped lastTfStamped;
 //    lastTfStamped.header.stamp.sec = 0;
@@ -176,6 +166,7 @@ int main (int argc, char **argv)
 //        ros::spinOnce();
 //        rate.sleep();
 //    }
+*/
 
     return 0;
 }
@@ -223,22 +214,58 @@ void tf_add_to_map (const tf::StampedTransform & t)
 }
 
 
-std::vector<tf::StampedTransform> query_4_tf (const tf2_ros::Buffer &buf, const ros::Time &time)
+std::vector<tf::StampedTransform> queryTF (const tf2_ros::Buffer &buf, const ros::Time &time, const int& num_tf)
 {
-    std::vector<geometry_msgs::TransformStamped> ret;
-    geometry_msgs::TransformStamped tfStamped = buf.lookupTransform("world", "base", time);
-    ros::Time devi(1.0/TF_RATE);
-    bool devi_direction = false;
-    if (tfStamped.header.stamp - time < ros::Duration(0))
+    std::vector<geometry_msgs::TransformStamped> _ret;
+    geometry_msgs::TransformStamped tf_nearest = buf.lookupTransform("world", "base", time);
+    int count = 0;
+    double devi = 1.0 / TF_RATE;
+
+    /// Tries to lookup for the transform in the future until unavailable
+    std::vector<geometry_msgs::TransformStamped> future_part;
+    for (int i = 1; i < num_tf / 2; i += 1)
     {
-        // Twice times up and once down
-        devi_direction = true;
+        ros::Duration _devi(i * devi);
+        ros::Time _t = time + _devi;
+        try
+        {
+            geometry_msgs::TransformStamped stamped_tf = buf.lookupTransform("world", "base", _t);
+            future_part.push_back(stamped_tf);
+            count += 1;
+        }catch (tf::TransformException& ex)
+        {
+            break;
+        }
     }
-    for (int i = -2; i < 2; i += 1)
+
+    /// Then tries to fetch all the past transform until satisfying ``num_tf''
+    while (count <= num_tf)
     {
-        if ((devi_direction && i == -2) || (!devi_direction && i == 2)) continue;
-        ros::Time _t(time.sec - i * devi.sec, time.nsec - i * devi.nsec);
-        tfStamped = buf.lookupTransform("world", "base", time);
-        ret.push_back(tfStamped);
+        ros::Duration _devi((num_tf - count) * devi);
+        ros::Time _t = time - _devi;
+        try
+        {
+            geometry_msgs::TransformStamped stamped_tf = buf.lookupTransform("world", "base", _t);
+            _ret.push_back(stamped_tf);
+        }catch (tf::TransformException& ex)
+        {
+            continue;
+        }
+        count += 1;
     }
+
+
+    /// Concatenates three parts of tf and cast into tf::StampedTransform type.
+    _ret.push_back(tf_nearest);
+    _ret.insert(_ret.end(),future_part.begin(), future_part.end());
+
+    std::vector<tf::StampedTransform> ret;
+    for (const auto& t : _ret)
+    {
+        tf::StampedTransform _tf;
+        tf::transformStampedMsgToTF(t, _tf);
+        ret.push_back(_tf);
+    }
+
+
 }
