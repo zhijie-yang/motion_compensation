@@ -12,32 +12,67 @@
 class TransformExpr
 {
 public:
-    ros::Time base_time;
-
     unsigned long num_terms;
     /// Suppose the translation in x, y and z are functions w.r.t time t in third order (fit with four stamped tf)
     /// x = x(t) = a_x*x^3 + b_x*x^2 + c_x*x + d_x
     /// The parameters to express the translation, should be given as [x_param, y_param, z_param]
-    std::vector<std::vector<int>> translation_param;
+    std::vector<std::vector<double>> translation_param;
     /// TODO: Decide what is the formula to express the rotation functions
     /// Suppose the rotation given in quaternion is a function w.r.t. time t in the third order
-    std::vector<std::vector<int>> rotation_param;
+    std::vector<std::vector<double>> rotation_param;
 
 
-    TransformExpr(int order, const std::vector<std::vector<int>>& translation_param, const std::vector<std::vector<int>>& rotation_param, ros::Time base_time);
-    TransformExpr(int order, ros::Time base_time);
+    /** \brief Constructor of class TransformExpr given number of terms and coefficients
+     *	\param the number of terms in the polynomial equation
+     *	\param the coefficient matrix of translation function
+     *	\param the coefficient matrix of rotation function
+     *	\return an instance of class TransformExpr
+     */
+    TransformExpr(int order, const std::vector<std::vector<double>>& translation_param, const std::vector<std::vector<double>>& rotation_param);
+
+    /** \brief Constructor of class TransformExpr given only the number of terms
+     *	\param the number of terms in the polynomial equation
+     *	\return an instance of class TransformExpr
+     */
+    explicit TransformExpr(int order);
 };
 
 
 class Interpolator
 {
 public:
-    ros::Time base_time;
-    explicit Interpolator(ros::Time base_time);
+    /** \brief calculates the transform at a specific time
+     *	\param the coefficients of the transform curve
+     *	\param the point of time
+     *	\return an instance of stamped transform
+     */
     static tf::StampedTransform interpolate (const TransformExpr& tf_expr, ros::Time t);
-    static TransformExpr fitTrajectory (const std::vector<tf::StampedTransform>& tf_vec, ros::Time base_time);
-    static cv::Mat polyFit(std::vector<cv::Point>& in_point, int n);
+
+    /** \brief calculates the coefficients of the transform curve
+     *	\param the vector containing a sequence of transforms
+     *	\return an instance of class TransformExpr
+     */
+    static TransformExpr fitTrajectory (const std::vector<tf::StampedTransform>& tf_vec);
+
+    /** \brief The function does the fitting
+     *  \param the vector containing points to be fitted into
+     *	\param the number of terms in the polynomial equation
+     *	\return the coefficients
+     */
+    static std::vector<double> polyFit(std::vector<cv::Point>& in_point, int n);
+
+    /** \brief Converts ros time stamp into a long integer with unit at microseconds
+     *  \param the ros time stamp
+     *	\return microseconds with type long
+     */
     static long convertToExprTime(ros::Time t);
+
+    /** \brief Calculates the coordinate at a specific time with the expression of transform function
+     *  \param the coefficients
+     *	\param microseconds at the specific time
+     *	\return the coordinate
+     */
+    static double calcCoord(const std::vector<double>& param_vec, long expr_time);
 };
 
 

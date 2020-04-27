@@ -22,10 +22,6 @@ tf2_ros::TransformListener tfListener(tfBuffer);
 class Compensator
 {
 public:
-    ros::Time base_time;
-
-    explicit Compensator(ros::Time base_time);
-
     /** \brief transform wrapper for points
      *	\param the point to be transformed, should be a point type defined in pcl
      *	\param the transform to be applied
@@ -33,11 +29,11 @@ public:
     static pcl::PointXYZI  applyTransform(pcl::PointXYZI p, tf::Transform tf);
 
 
-    /** \brief compensation function for online processing
+    /** \brief compensation function for online processing, predicts the tf of points using past transforms
      *	\param the point cloud to be compensated
      *	\param the vector containing four transfrom closest to the stamp of the point cloud
      */
-    void onlineCompensate(const stamped_scan_msgs::Scan& _cloud, const std::vector<tf::StampedTransform>& _tf_vec);
+    static void onlineCompensate(const stamped_scan_msgs::Scan& _cloud, const std::vector<tf::StampedTransform>& _tf_vec);
 
     static void offlineCompensate(sensor_msgs::PointCloud2 cloud, std::vector<geometry_msgs::TransformStamped> tf_vec);
 
@@ -57,9 +53,6 @@ std::vector<tf::StampedTransform> queryTF (const tf2_ros::Buffer &buf, const ros
 /*
  * ========================================================
  */
-
-
-
 
 
 #endif //MOTION_COMPENSATION_COMPENSATOR_H

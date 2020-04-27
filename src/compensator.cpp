@@ -34,14 +34,9 @@ std::map<ros::Time, tf::StampedTransform > tf_map;
 
 ros::Publisher compensated_cloud_publisher;
 
-
-/** \brief compensation function for online processing, predicts the tf of points using past transforms
- *	\param the point cloud to be compensated
- *	\param the vector containing four transfrom closest to the stamp of the point cloud
- */
 void Compensator::onlineCompensate(const stamped_scan_msgs::Scan& _cloud, const std::vector<tf::StampedTransform>& _tf_vec)
 {
-    TransformExpr tf_expr = Interpolator::fitTrajectory(_tf_vec, this->base_time);
+    TransformExpr tf_expr = Interpolator::fitTrajectory(_tf_vec);
     tf::StampedTransform local_world;
     local_world = Interpolator::interpolate(tf_expr, _cloud.header.stamp);
     pcl::PointCloud<pcl::PointXYZI> ret;
@@ -67,11 +62,6 @@ void Compensator::offlineCompensate(sensor_msgs::PointCloud2 cloud, std::vector<
 //    }
 }
 
-/** \brief transform wrapper for points
- *	\param the point to be transformed, should be a point type defined in pcl
- *	\param the transform to be applied
- */
-
 pcl::PointXYZI Compensator::applyTransform(pcl::PointXYZI p, tf::Transform tf)
 {
     pcl::PointXYZI ret;
@@ -91,11 +81,6 @@ pcl::PointXYZI Compensator::applyTransform(pcl::PointXYZI p, tf::Transform tf)
     return ret;
 }
 
-Compensator::Compensator(ros::Time base_time)
-{
-    this->base_time = base_time;
-}
-
 void point_cloud_callback (const sensor_msgs::PointCloud2ConstPtr &pc)
 {
 //    pointCloudBuf.push_back(pc);
@@ -112,61 +97,9 @@ int main (int argc, char **argv)
     ros::NodeHandle n;
     ros::Subscriber sub = n.subscribe("/velodyne_points", 1000, point_cloud_callback);
 
-
     compensated_cloud_publisher = n.advertise<sensor_msgs::PointCloud2>("/undistorted_points", 1);
 
-
-
     ros::spin();
-
-/*
-//    ros::Rate rate(10.0);
-//    geometry_msgs::TransformStamped lastTfStamped;
-//    lastTfStamped.header.stamp.sec = 0;
-//    while (n.ok()){
-//        geometry_msgs::TransformStamped transformStamped;
-//        try
-//        {
-//            transformStamped = tfBuffer.lookupTransform("world", "base",
-//                                                        ros::Time(0));
-//            if (transformStamped.header.stamp != lastTfStamped.header.stamp)
-//            {
-////                std::cerr << "Last stamp: " << lastTfStamped.header.stamp << std::endl;
-//                std::cerr << "Current stamp: " << transformStamped.header.stamp << std::endl;
-////                std::cerr << "1" << std::endl;
-//                tfVec.push_back(transformStamped);
-////                std::cerr << "Newest stamp: " << transformStamped.header.stamp << std::endl;
-//                long len = tfVec.size();
-//                std::cerr << "length: " << len << std::endl;
-//                if (len >= 2)
-//                {
-////                    ros::Time t1, t0;
-////                    t1.sec = tfVec[len-1].header.stamp.sec; t1.nsec = tfVec[len-1].header.stamp.sec;
-////                    t0.sec = tfVec[len-2].header.stamp.sec; t0.nsec = tfVec[len-2].header.stamp.sec;
-////                    std::cerr << "t0: " << t0 << std::endl;
-////                    std::cerr << "t1: " << t1 << std::endl;
-////                    std::cerr << "n(t1-t0): " << t1.nsec - t0.nsec << std::endl;
-////                    auto d = t1 - t0;
-//                    std::cerr << "tf period from base to world: " << transformStamped.header.stamp - lastTfStamped.header.stamp << std::endl;
-//                    tf::Stamped<tf::Transform> t1;
-//                    tf::Stamped<tf::Transform> t0;
-//                    tf::Transform t0_inv = t0.inverse();
-//                    std::cerr << VNAME(t0_inv*t1) << std::endl;
-//                    print_tf(t0_inv*t1);
-//                }
-//                lastTfStamped = transformStamped;
-//            }
-//
-//        }
-//        catch (tf2::TransformException &ex) {
-//            ROS_WARN("%s",ex.what());
-//            ros::Duration(1.0).sleep();
-//            continue;
-//        }
-//        ros::spinOnce();
-//        rate.sleep();
-//    }
-*/
 
     return 0;
 }
