@@ -61,64 +61,18 @@ public:
      */
     static std::vector<double> polyFit(std::vector<cv::Point>& in_point, int n);
 
-    /** \brief Converts ros time stamp into a long integer with unit at microseconds
+    /** \brief Converts ros time stamp into a double with accuracy to microseconds
      *  \param the ros time stamp
-     *	\return microseconds with type long
+     *	\return time stamp with type double
      */
-    static long convertToExprTime(ros::Time t);
+    static double convertToExprTime(ros::Time t);
 
     /** \brief Calculates the coordinate at a specific time with the expression of transform function
      *  \param the coefficients
      *	\param microseconds at the specific time
      *	\return the coordinate
      */
-    static double calcCoord(const std::vector<double>& param_vec, long expr_time);
+    static double calcCoord(const std::vector<double>& param_vec, double expr_time);
 };
-
-
-/* int main()
-{
-    //数据输入
-    Point in[19] = { Point(50,120),Point(74,110),Point(98,100),Point(122,100),Point(144,80)
-            ,Point(168,80),Point(192,70),Point(214,50),Point(236,40),Point(262,20)
-            ,Point(282,20),Point(306,30),Point(328,40),Point(356,50),Point(376,50)
-            ,Point(400,50),Point(424,50),Point(446,40),Point(468,30) };
-
-    vector<Point> in_point(begin(in),end(in));
-
-    //n:多项式阶次
-    int n = 9;
-    Mat mat_k = polyFit(in_point, n);
-
-
-    //计算结果可视化
-    Mat out(150, 500, CV_8UC3,Scalar::all(0));
-
-    //画出拟合曲线
-    for (int i = in[0].x; i < in[size(in)-1].x; ++i)
-    {
-        Point2d ipt;
-        ipt.x = i;
-        ipt.y = 0;
-        for (int j = 0; j < n + 1; ++j)
-        {
-            ipt.y += mat_k.at<double>(j, 0)*pow(i,j);
-        }
-        circle(out, ipt, 1, Scalar(255, 255, 255), CV_FILLED, CV_AA);
-    }
-
-    //画出原始散点
-    for (int i = 0; i < size(in); ++i)
-    {
-        Point ipt = in[i];
-        circle(out, ipt, 3, Scalar(0, 0, 255), CV_FILLED, CV_AA);
-    }
-
-    imshow("9次拟合", out);
-    waitKey(0);
-
-    return 0;
-} */
-
 
 #endif //MOTION_COMPENSATION_INTERPOLATOR_H

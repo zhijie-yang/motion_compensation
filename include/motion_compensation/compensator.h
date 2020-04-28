@@ -46,7 +46,7 @@ public:
 tf::Transform tf_strip_stamp (const tf::StampedTransform & t);
 double calc_azimuth (pcl::PointXYZI p);
 double calc_pitch (pcl::PointXYZI p);
-void print_tf (tf::Transform t);
+void print_tf (tf::StampedTransform t);
 void tf_add_to_map (const tf::StampedTransform & t);
 std::vector<tf::StampedTransform> queryTF (const tf2_ros::Buffer &buf, const ros::Time &time, const int& num_tf);
 /*

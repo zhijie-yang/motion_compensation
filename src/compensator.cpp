@@ -85,15 +85,20 @@ pcl::PointXYZI Compensator::applyTransform(pcl::PointXYZI p, tf::Transform tf)
 void point_cloud_callback (const stamped_scan_msgs::Scan &msg)
 {
 //    pointCloudBuf.push_back(pc);
-    std::cerr << "In the callback" << std::endl;
+//    std::cerr << "In the callback" << std::endl;
     int num_tf = 4;
     std::vector<tf::StampedTransform> tf_vec = queryTF(tfBuffer, msg.header.stamp, num_tf);
-    std::cerr << "tf_vec length: " << tf_vec.size() << std::endl;
-    std::cerr << "Querying TF completed" << std::endl;
-//    if (tf_vec.size() < num_tf)
-//    {
-//        return;
-//    }
+//    std::cerr << "tf_vec length: " << tf_vec.size() << std::endl;
+//    std::cerr << "Querying TF completed" << std::endl;
+    if (tf_vec.size() < num_tf - 2)
+    {
+        return;
+    }
+
+    for (auto &t : tf_vec)
+    {
+        print_tf(t);
+    }
 
     std::cerr << "Compensating... tf_vec length: " << tf_vec.size() << std::endl;
     Compensator::onlineCompensate(msg, tf_vec);
@@ -139,10 +144,11 @@ double calc_pitch (pcl::PointXYZI p)
     return atan2(p.z, sqrt(p.x * p.x + p.y * p.y)) * 180 / PI;
 }
 
-void print_tf (tf::Transform t)
+void print_tf (tf::StampedTransform t)
 {
     std::cerr << "transform: " << std::endl
-              << "x: " << t.getOrigin().getX() << std::endl
+              << "stamp:" << t.stamp_.sec << "." << std::setw(2) << std::setfill('0') << t.stamp_.nsec << std::endl;
+              std::cout << "x: " << t.getOrigin().getX() << std::endl
               << "y: " << t.getOrigin().getY() << std::endl
               << "z: " << t.getOrigin().getZ() << std::endl
               << "q: " << t.getRotation().getX() << " " << t.getRotation().getY()
@@ -159,7 +165,7 @@ void tf_add_to_map (const tf::StampedTransform & t)
 
 std::vector<tf::StampedTransform> queryTF (const tf2_ros::Buffer &buf, const ros::Time &time, const int& num_tf)
 {
-    std::cerr << "Querying TF" << std::endl;
+//    std::cerr << "Querying TF" << std::endl;
     std::vector<geometry_msgs::TransformStamped> _ret;
     geometry_msgs::TransformStamped tf_nearest;
     try
@@ -207,11 +213,11 @@ std::vector<tf::StampedTransform> queryTF (const tf2_ros::Buffer &buf, const ros
         count += 1;
     }
 
-    std::cerr << "_ret length (before copy): " << _ret.size() << std::endl;
+    std::cerr << "# past tf: " << _ret.size() << std::endl;
     /// Concatenates three parts of tf and cast into tf::StampedTransform type.
     _ret.push_back(tf_nearest);
     _ret.insert(_ret.end(),future_part.begin(), future_part.end());
-    std::cerr << "_ret length (after copy): " << _ret.size() << std::endl;
+    std::cerr << "# future tf: " << future_part.size() << std::endl;
 
     std::vector<tf::StampedTransform> ret;
     for (const auto& t : _ret)
@@ -220,6 +226,6 @@ std::vector<tf::StampedTransform> queryTF (const tf2_ros::Buffer &buf, const ros
         tf::transformStampedMsgToTF(t, _tf);
         ret.push_back(_tf);
     }
-    std::cerr << "ret length: " << _ret.size() << std::endl;
+//    std::cerr << "ret length: " << _ret.size() << std::endl;
     return ret;
 }

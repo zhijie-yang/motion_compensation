@@ -37,26 +37,19 @@ TransformExpr Interpolator::fitTrajectory(const std::vector<tf::StampedTransform
     std::vector<cv::Point> z_points;
     for (auto & tf : tf_vec)
     {
-        long time = Interpolator::convertToExprTime(tf.stamp_);
-        cv::Point2l x_point(time, (long) (tf.getOrigin().getX() * 1e6));
-        cv::Point2l y_point(time, (long) (tf.getOrigin().getY() * 1e6));
-        cv::Point2l z_point(time, (long) (tf.getOrigin().getZ() * 1e6));
+        double time = Interpolator::convertToExprTime(tf.stamp_);
+        cv::Point2d x_point(time, (tf.getOrigin().getX()));
+        cv::Point2d y_point(time, (tf.getOrigin().getY()));
+        cv::Point2d z_point(time, (tf.getOrigin().getZ()));
         x_points.push_back(x_point);
         y_points.push_back(y_point);
         z_points.push_back(z_point);
     }
     std::vector<std::vector<double>> translation_param_vec;
     translation_param_vec.resize(3);
-//    translation_param_vec[0] = Interpolator::polyFit(x_points, tf_vec.size());
-//    translation_param_vec[1] = Interpolator::polyFit(y_points, tf_vec.size());
-//    translation_param_vec[2] = Interpolator::polyFit(z_points, tf_vec.size());
-    std::vector<double> tmp = Interpolator::polyFit(x_points, tf_vec.size());
-//    translation_param_vec[0].resize(tf_vec.size());
-    translation_param_vec[0].insert(translation_param_vec[0].end(), tmp.begin(), tmp.end());
-    tmp = Interpolator::polyFit(y_points, tf_vec.size());
-    translation_param_vec[1].insert(translation_param_vec[1].end(), tmp.begin(), tmp.end());
-    tmp = Interpolator::polyFit(z_points, tf_vec.size());
-    translation_param_vec[2].insert(translation_param_vec[2].end(), tmp.begin(), tmp.end());
+    translation_param_vec[0] = Interpolator::polyFit(x_points, tf_vec.size());
+    translation_param_vec[1] = Interpolator::polyFit(y_points, tf_vec.size());
+    translation_param_vec[2] = Interpolator::polyFit(z_points, tf_vec.size());
     std::vector<std::vector<double>> rotation_param_vec;
     TransformExpr tf_expr(tf_vec.size(), translation_param_vec, rotation_param_vec);
 
@@ -111,13 +104,13 @@ std::vector<double> Interpolator::polyFit(std::vector<cv::Point> &in_point, int 
     return ret;
 }
 
-long Interpolator::convertToExprTime(ros::Time t)
+double Interpolator::convertToExprTime(ros::Time t)
 {
     ///Narrow precision into microseconds
-    return ((long) (t.sec * 1e6)) + ((long) (t.nsec / 1e3));
+    return t.sec + (t.nsec / 1e9);
 }
 
-double Interpolator::calcCoord(const std::vector<double>& param_vec, long expr_time)
+double Interpolator::calcCoord(const std::vector<double>& param_vec, double expr_time)
 {
     double ret = 0;
     for (int i = 0; i < param_vec.size(); i += 1)
