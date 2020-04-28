@@ -40,6 +40,7 @@ void Compensator::onlineCompensate(const stamped_scan_msgs::Scan& _cloud, const 
     tf::StampedTransform local_world;
     local_world = Interpolator::interpolate(tf_expr, _cloud.header.stamp);
     pcl::PointCloud<pcl::PointXYZI> ret;
+    std::cerr << "Iterating through all points" << std::endl;
     for (auto point : _cloud.points)
     {
         tf::StampedTransform tf = Interpolator::interpolate(tf_expr, point.time_stamp);
@@ -81,13 +82,21 @@ pcl::PointXYZI Compensator::applyTransform(pcl::PointXYZI p, tf::Transform tf)
     return ret;
 }
 
-void point_cloud_callback (const sensor_msgs::PointCloud2ConstPtr &pc)
+void point_cloud_callback (const stamped_scan_msgs::Scan &msg)
 {
 //    pointCloudBuf.push_back(pc);
     std::cerr << "In the callback" << std::endl;
-    pcl::PCLPointCloud2 pclPoints;
-    pcl_conversions::toPCL(*pc, pclPoints);
-    int ring = 10;
+    int num_tf = 4;
+    std::vector<tf::StampedTransform> tf_vec = queryTF(tfBuffer, msg.header.stamp, num_tf);
+    std::cerr << "tf_vec length: " << tf_vec.size() << std::endl;
+    std::cerr << "Querying TF completed" << std::endl;
+//    if (tf_vec.size() < num_tf)
+//    {
+//        return;
+//    }
+
+    std::cerr << "Compensating... tf_vec length: " << tf_vec.size() << std::endl;
+    Compensator::onlineCompensate(msg, tf_vec);
 }
 
 
@@ -95,7 +104,8 @@ int main (int argc, char **argv)
 {
     ros::init(argc, argv, "Motion_Compensation");
     ros::NodeHandle n;
-    ros::Subscriber sub = n.subscribe("/velodyne_points", 1000, point_cloud_callback);
+    tf2_ros::TransformListener tfListener(tfBuffer);
+    ros::Subscriber sub = n.subscribe("/velodyne_points_stamped", 1000, point_cloud_callback);
 
     compensated_cloud_publisher = n.advertise<sensor_msgs::PointCloud2>("/undistorted_points", 1);
 
@@ -149,8 +159,16 @@ void tf_add_to_map (const tf::StampedTransform & t)
 
 std::vector<tf::StampedTransform> queryTF (const tf2_ros::Buffer &buf, const ros::Time &time, const int& num_tf)
 {
+    std::cerr << "Querying TF" << std::endl;
     std::vector<geometry_msgs::TransformStamped> _ret;
-    geometry_msgs::TransformStamped tf_nearest = buf.lookupTransform("world", "base", time);
+    geometry_msgs::TransformStamped tf_nearest;
+    try
+    {
+        tf_nearest = buf.lookupTransform("world", "base", time);
+    }catch (tf::TransformException& ex)
+    {
+
+    }
     int count = 0;
     double devi = 1.0 / TF_RATE;
 
@@ -171,6 +189,7 @@ std::vector<tf::StampedTransform> queryTF (const tf2_ros::Buffer &buf, const ros
         }
     }
 
+    std::cout << "Entering while loop in queryTF" << std::endl;
     /// Then tries to fetch all the past transform until satisfying ``num_tf''
     while (count <= num_tf)
     {
@@ -182,15 +201,17 @@ std::vector<tf::StampedTransform> queryTF (const tf2_ros::Buffer &buf, const ros
             _ret.push_back(stamped_tf);
         }catch (tf::TransformException& ex)
         {
+            count += 1;
             continue;
         }
         count += 1;
     }
 
-
+    std::cerr << "_ret length (before copy): " << _ret.size() << std::endl;
     /// Concatenates three parts of tf and cast into tf::StampedTransform type.
     _ret.push_back(tf_nearest);
     _ret.insert(_ret.end(),future_part.begin(), future_part.end());
+    std::cerr << "_ret length (after copy): " << _ret.size() << std::endl;
 
     std::vector<tf::StampedTransform> ret;
     for (const auto& t : _ret)
@@ -199,6 +220,6 @@ std::vector<tf::StampedTransform> queryTF (const tf2_ros::Buffer &buf, const ros
         tf::transformStampedMsgToTF(t, _tf);
         ret.push_back(_tf);
     }
-
-
+    std::cerr << "ret length: " << _ret.size() << std::endl;
+    return ret;
 }

@@ -46,9 +46,17 @@ TransformExpr Interpolator::fitTrajectory(const std::vector<tf::StampedTransform
         z_points.push_back(z_point);
     }
     std::vector<std::vector<double>> translation_param_vec;
-    translation_param_vec[0] = Interpolator::polyFit(x_points, tf_vec.size());
-    translation_param_vec[1] = Interpolator::polyFit(y_points, tf_vec.size());
-    translation_param_vec[2] = Interpolator::polyFit(z_points, tf_vec.size());
+    translation_param_vec.resize(3);
+//    translation_param_vec[0] = Interpolator::polyFit(x_points, tf_vec.size());
+//    translation_param_vec[1] = Interpolator::polyFit(y_points, tf_vec.size());
+//    translation_param_vec[2] = Interpolator::polyFit(z_points, tf_vec.size());
+    std::vector<double> tmp = Interpolator::polyFit(x_points, tf_vec.size());
+//    translation_param_vec[0].resize(tf_vec.size());
+    translation_param_vec[0].insert(translation_param_vec[0].end(), tmp.begin(), tmp.end());
+    tmp = Interpolator::polyFit(y_points, tf_vec.size());
+    translation_param_vec[1].insert(translation_param_vec[1].end(), tmp.begin(), tmp.end());
+    tmp = Interpolator::polyFit(z_points, tf_vec.size());
+    translation_param_vec[2].insert(translation_param_vec[2].end(), tmp.begin(), tmp.end());
     std::vector<std::vector<double>> rotation_param_vec;
     TransformExpr tf_expr(tf_vec.size(), translation_param_vec, rotation_param_vec);
 
@@ -99,6 +107,7 @@ std::vector<double> Interpolator::polyFit(std::vector<cv::Point> &in_point, int 
     {
         ret.push_back(mat_k.at<double>(i, 0));
     }
+    std::cout << "param_vec_length: " << ret.size() << std::endl;
     return ret;
 }
 

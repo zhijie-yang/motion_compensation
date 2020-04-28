@@ -17,7 +17,6 @@
 #define TF_RATE 10
 
 tf2_ros::Buffer tfBuffer;
-tf2_ros::TransformListener tfListener(tfBuffer);
 
 class Compensator
 {
