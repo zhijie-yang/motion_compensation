@@ -41,13 +41,29 @@ void Compensator::onlineCompensate(const stamped_scan_msgs::Scan& _cloud, const 
     local_world = Interpolator::interpolate(tf_expr, _cloud.header.stamp);
     pcl::PointCloud<pcl::PointXYZI> ret;
     std::cerr << "Iterating through all points" << std::endl;
+    unsigned long zero_count = 0;
     for (auto point : _cloud.points)
     {
         tf::StampedTransform tf = Interpolator::interpolate(tf_expr, point.time_stamp);
+        if (tf.getOrigin().getX() == 0 && tf.getOrigin().getY() == 0 && tf.getOrigin().getZ() == 0)
+        {
+            zero_count += 1;
+            continue;
+        }
+        tf.setRotation(tf::createIdentityQuaternion());
         pcl::PointXYZI p;
         p.x = point.position.x; p.y = point.position.y; p.z = point.position.z; p.intensity = point.intensity;
-        ret.push_back(applyTransform(applyTransform (p, tf_strip_stamp(tf)), local_world.inverse()));
+//        std::cerr << "Dist before tf: " << sqrt(p.x * p.x + p.y * p.y + p.z * p.z) << std::endl;
+        tf::Transform _tf = local_world.inverse() * tf_strip_stamp(tf);
+//        std::cerr << "Time of local world: " << _cloud.header.stamp << std::endl;
+//        std::cerr << "Time: " << point.time_stamp << std::endl;
+//        print_tf(_tf);
+//        pcl::PointXYZI _p = applyTransform(applyTransform (p, tf_strip_stamp(tf)), local_world.inverse());
+        pcl::PointXYZI _p = applyTransform(p, _tf);
+        ret.push_back(_p);
+//        std::cerr << "Dist after tf : " << sqrt(_p.x * _p.x + _p.y * _p.y + _p.z * _p.z) << std::endl;
     }
+    std::cerr << "Num of zero translations: " << zero_count << std::endl;
     sensor_msgs::PointCloud2 cloud_msg;
     pcl::toROSMsg(ret, cloud_msg);
     cloud_msg.header = _cloud.header;
@@ -77,7 +93,9 @@ pcl::PointXYZI Compensator::applyTransform(pcl::PointXYZI p, tf::Transform tf)
     affine.matrix() = mat;
     /// This cast<float>() is so fucking important!!
     /// Without this explicit cast Eigen will give a shit long error!!!
-    ret = pcl::transformPoint(p, affine.cast<float>());
+    Eigen::Affine3f a = affine.cast<float>();
+    ret = pcl::transformPoint(p, a);
+//    ret = pcl::transformPoint(p, affine.cast<float>());
 
     return ret;
 }
@@ -90,17 +108,21 @@ void point_cloud_callback (const stamped_scan_msgs::Scan &msg)
     std::vector<tf::StampedTransform> tf_vec = queryTF(tfBuffer, msg.header.stamp, num_tf);
 //    std::cerr << "tf_vec length: " << tf_vec.size() << std::endl;
 //    std::cerr << "Querying TF completed" << std::endl;
-    if (tf_vec.size() < num_tf - 2)
+    if (tf_vec.size() < 2)
     {
         return;
     }
 
-    for (auto &t : tf_vec)
-    {
-        print_tf(t);
-    }
+//    for (auto &t : tf_vec)
+//    {
+//        print_tf(t);
+//    }
 
     std::cerr << "Compensating... tf_vec length: " << tf_vec.size() << std::endl;
+//    if (tf_vec.size() < num_tf)
+//    {
+//        return;
+//    }
     Compensator::onlineCompensate(msg, tf_vec);
 }
 
@@ -144,14 +166,19 @@ double calc_pitch (pcl::PointXYZI p)
     return atan2(p.z, sqrt(p.x * p.x + p.y * p.y)) * 180 / PI;
 }
 
-void print_tf (tf::StampedTransform t)
+void print_tf (tf::Transform t)
 {
+    if (t.getOrigin().getX() == 0 && t.getOrigin().getY() == 0 && t.getOrigin().getZ() == 0)
+    {
+        std::cerr << "Zero translation, passing.." << std::endl;
+        return;
+    }
     std::cerr << "transform: " << std::endl
-              << "stamp:" << t.stamp_.sec << "." << std::setw(2) << std::setfill('0') << t.stamp_.nsec << std::endl;
-              std::cout << "x: " << t.getOrigin().getX() << std::endl
+//              << "stamp:" << t.stamp_.sec << "." << std::setw(2) << std::setfill('0') << t.stamp_.nsec << std::endl
+              << "x: " << t.getOrigin().getX() << std::endl
               << "y: " << t.getOrigin().getY() << std::endl
               << "z: " << t.getOrigin().getZ() << std::endl
-              << "q: " << t.getRotation().getX() << " " << t.getRotation().getY()
+              << "q: " << t.getRotation().getX() << " " << t.getRotation().getY() << " "
               << t.getRotation().getZ() << " " << t.getRotation().getW()<< std::endl;
 }
 
@@ -197,7 +224,7 @@ std::vector<tf::StampedTransform> queryTF (const tf2_ros::Buffer &buf, const ros
 
     std::cout << "Entering while loop in queryTF" << std::endl;
     /// Then tries to fetch all the past transform until satisfying ``num_tf''
-    while (count <= num_tf)
+    while (count < num_tf - 1)
     {
         ros::Duration _devi((num_tf - count) * devi);
         ros::Time _t = time - _devi;
@@ -205,12 +232,12 @@ std::vector<tf::StampedTransform> queryTF (const tf2_ros::Buffer &buf, const ros
         {
             geometry_msgs::TransformStamped stamped_tf = buf.lookupTransform("world", "base", _t);
             _ret.push_back(stamped_tf);
+            count += 1;
         }catch (tf::TransformException& ex)
         {
             count += 1;
             continue;
         }
-        count += 1;
     }
 
     std::cerr << "# past tf: " << _ret.size() << std::endl;

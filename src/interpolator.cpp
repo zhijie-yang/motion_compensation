@@ -15,14 +15,20 @@ Interpolator::interpolate(const TransformExpr &tf_expr, ros::Time _t)
 
     /// The order of the function is determined by the length of tf_vec
     /// order = tf_vec.size() - 1
-    long t = Interpolator::convertToExprTime(_t);
-    double x = Interpolator::calcCoord(tf_expr.translation_param[0], t);
-    double y = Interpolator::calcCoord(tf_expr.translation_param[1], t);
-    double z = Interpolator::calcCoord(tf_expr.translation_param[2], t);
+    double t = tf_expr.convertToExprTime(_t);
+    std::vector<double> coord;
+    coord = tf_expr.calcCoord(t);
+    double x = coord[0];
+    double y = coord[1];
+    double z = coord[2];
     tf::Vector3 origin(x, y, z);
+//    std::cerr << "Calculated translation: " << std::endl;
+//    for (auto &i : coord)
+//    {
+//        std::cerr << i << " " << std::endl;
+//    }
     tf::StampedTransform tf;
     tf.setOrigin(origin);
-
 
     return tf;
     /// Calculate the transform from base to world at given time t
@@ -32,12 +38,13 @@ Interpolator::interpolate(const TransformExpr &tf_expr, ros::Time _t)
 TransformExpr Interpolator::fitTrajectory(const std::vector<tf::StampedTransform> &tf_vec)
 {
 //    TransformExpr tf_expr(tf_vec.size(), base_time);
-    std::vector<cv::Point> x_points;
-    std::vector<cv::Point> y_points;
-    std::vector<cv::Point> z_points;
+    std::vector<cv::Point2d> x_points;
+    std::vector<cv::Point2d> y_points;
+    std::vector<cv::Point2d> z_points;
+    TransformExpr tf_expr(tf_vec.size(), tf_vec[0].stamp_);
     for (auto & tf : tf_vec)
     {
-        double time = Interpolator::convertToExprTime(tf.stamp_);
+        double time = tf_expr.convertToExprTime(tf.stamp_);
         cv::Point2d x_point(time, (tf.getOrigin().getX()));
         cv::Point2d y_point(time, (tf.getOrigin().getY()));
         cv::Point2d z_point(time, (tf.getOrigin().getZ()));
@@ -51,27 +58,28 @@ TransformExpr Interpolator::fitTrajectory(const std::vector<tf::StampedTransform
     translation_param_vec[1] = Interpolator::polyFit(y_points, tf_vec.size());
     translation_param_vec[2] = Interpolator::polyFit(z_points, tf_vec.size());
     std::vector<std::vector<double>> rotation_param_vec;
-    TransformExpr tf_expr(tf_vec.size(), translation_param_vec, rotation_param_vec);
-
+    tf_expr.setTranslationParam(translation_param_vec);
     return tf_expr;
 }
 
-TransformExpr::TransformExpr(int num_terms, const std::vector<std::vector<double>> &translation_param,
+TransformExpr::TransformExpr(int num_terms, ros::Time t, const std::vector<std::vector<double>> &translation_param,
                              const std::vector<std::vector<double>> &rotation_param)
 {
     this->num_terms = num_terms;
     this->translation_param = translation_param;
     this->rotation_param = rotation_param;
+    this->base_stamp = t.sec;
 }
 
-TransformExpr::TransformExpr(int num_terms)
+TransformExpr::TransformExpr(int num_terms, ros::Time t)
 {
     this->num_terms = num_terms;
     this->translation_param.resize(num_terms + 1);
     this->rotation_param.resize(num_terms + 1);
+    this->base_stamp = t.sec;
 }
 
-std::vector<double> Interpolator::polyFit(std::vector<cv::Point> &in_point, int n)
+std::vector<double> Interpolator::polyFit(std::vector<cv::Point2d> &in_point, int n)
 {
     int size = in_point.size();
     //所求未知数个数
@@ -94,28 +102,54 @@ std::vector<double> Interpolator::polyFit(std::vector<cv::Point> &in_point, int 
     //矩阵运算，获得系数矩阵K
     cv::Mat mat_k(x_num, 1, CV_64F);
     mat_k = (mat_u.t() * mat_u).inv() * mat_u.t() * mat_y;
-    std::cout << mat_k << std::endl;
+//    std::cout << mat_k << std::endl;
     std::vector<double> ret;
     for (int i = 0; i < mat_k.rows; i += 1)
     {
-        ret.push_back(mat_k.at<double>(i, 0));
+        double _param = mat_k.at<double>(i, 0);
+        if (i == 0 && _param == 0)
+        {
+            for (const auto& p : in_point)
+            {
+                std::cout << p.x << " " << p.y << std::endl;
+            }
+        }
+        ret.push_back(_param);
     }
-    std::cout << "param_vec_length: " << ret.size() << std::endl;
+//    std::cout << "param_vec_length: " << ret.size() << std::endl;
     return ret;
 }
 
-double Interpolator::convertToExprTime(ros::Time t)
+double TransformExpr::convertToExprTime(ros::Time t) const
 {
     ///Narrow precision into microseconds
-    return t.sec + (t.nsec / 1e9);
+    double _sec = t.sec - this->base_stamp;
+    return _sec + (t.nsec / 1e9);
 }
 
-double Interpolator::calcCoord(const std::vector<double>& param_vec, double expr_time)
+void TransformExpr::setTranslationParam(const std::vector<std::vector<double>> &_translation_param)
 {
-    double ret = 0;
-    for (int i = 0; i < param_vec.size(); i += 1)
+    this->translation_param = _translation_param;
+}
+
+void TransformExpr::setRotationParam(const std::vector<std::vector<double>> &_rotation_param)
+{
+    this->rotation_param = _rotation_param;
+}
+
+std::vector<double> TransformExpr::calcCoord(double expr_time) const
+{
+    std::vector<double> ret;
+    double _ret = 0;
+    for (int dim = 0; dim < 3; dim += 1)
     {
-        ret += param_vec[i] * pow(expr_time, i);
+        for (int i = 0; i < this->translation_param[dim].size(); i += 1)
+        {
+            _ret += this->translation_param[dim][i] * pow(expr_time, i);
+//            std::cerr << "Translation param " << dim << ": " << this->translation_param[dim][i] << std::endl;
+        }
+//        std::cerr << "Calculated coord " << dim << ": " << _ret << std::endl;
+        ret.push_back(_ret);
     }
     return ret;
 }

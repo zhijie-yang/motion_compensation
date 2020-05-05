@@ -13,6 +13,7 @@ class TransformExpr
 {
 public:
     unsigned long num_terms;
+    double base_stamp;
     /// Suppose the translation in x, y and z are functions w.r.t time t in third order (fit with four stamped tf)
     /// x = x(t) = a_x*x^3 + b_x*x^2 + c_x*x + d_x
     /// The parameters to express the translation, should be given as [x_param, y_param, z_param]
@@ -28,13 +29,33 @@ public:
      *	\param the coefficient matrix of rotation function
      *	\return an instance of class TransformExpr
      */
-    TransformExpr(int order, const std::vector<std::vector<double>>& translation_param, const std::vector<std::vector<double>>& rotation_param);
+    TransformExpr(int num_terms, ros::Time t, const std::vector<std::vector<double>>& translation_param, const std::vector<std::vector<double>>& rotation_param);
 
     /** \brief Constructor of class TransformExpr given only the number of terms
      *	\param the number of terms in the polynomial equation
      *	\return an instance of class TransformExpr
      */
-    explicit TransformExpr(int order);
+    TransformExpr(int num_terms, ros::Time t);
+
+    /** \brief Converts ros time stamp into a double with accuracy to microseconds
+     *  \param the ros time stamp
+     *	\return time stamp with type double
+     */
+    double convertToExprTime(ros::Time t) const;
+
+
+    void setTranslationParam(const std::vector<std::vector<double>>& _translation_param);
+
+    void setRotationParam(const std::vector<std::vector<double>>& _rotation_param);
+
+
+    /** \brief Calculates the coordinate at a specific time with the expression of transform function
+     *  \param the coefficients
+     *	\param microseconds at the specific time
+     *	\return the coordinate
+     */
+    std::vector<double> calcCoord(double expr_time) const;
+
 };
 
 
@@ -59,20 +80,8 @@ public:
      *	\param the number of terms in the polynomial equation
      *	\return the coefficients
      */
-    static std::vector<double> polyFit(std::vector<cv::Point>& in_point, int n);
+    static std::vector<double> polyFit(std::vector<cv::Point2d>& in_point, int n);
 
-    /** \brief Converts ros time stamp into a double with accuracy to microseconds
-     *  \param the ros time stamp
-     *	\return time stamp with type double
-     */
-    static double convertToExprTime(ros::Time t);
-
-    /** \brief Calculates the coordinate at a specific time with the expression of transform function
-     *  \param the coefficients
-     *	\param microseconds at the specific time
-     *	\return the coordinate
-     */
-    static double calcCoord(const std::vector<double>& param_vec, double expr_time);
 };
 
 #endif //MOTION_COMPENSATION_INTERPOLATOR_H
