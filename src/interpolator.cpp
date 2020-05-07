@@ -30,6 +30,8 @@ Interpolator::interpolate(const TransformExpr &tf_expr, ros::Time _t)
     tf::StampedTransform tf;
     tf.setOrigin(origin);
 
+    tf.setRotation(tf::createIdentityQuaternion());
+
     return tf;
     /// Calculate the transform from base to world at given time t
 

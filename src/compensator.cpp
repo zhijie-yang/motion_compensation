@@ -38,6 +38,9 @@ void Compensator::onlineCompensate(const stamped_scan_msgs::Scan& _cloud, const 
 {
     TransformExpr tf_expr = Interpolator::fitTrajectory(_tf_vec);
     tf::StampedTransform local_world;
+
+    local_world.setRotation(_tf_vec[0].getRotation());
+
     local_world = Interpolator::interpolate(tf_expr, _cloud.header.stamp);
     pcl::PointCloud<pcl::PointXYZI> ret;
     std::cerr << "Iterating through all points" << std::endl;
@@ -50,7 +53,10 @@ void Compensator::onlineCompensate(const stamped_scan_msgs::Scan& _cloud, const 
             zero_count += 1;
             continue;
         }
-        tf.setRotation(tf::createIdentityQuaternion());
+//        tf.setRotation(tf::createIdentityQuaternion());
+
+        local_world.setRotation(_tf_vec[0].getRotation());
+
         pcl::PointXYZI p;
         p.x = point.position.x; p.y = point.position.y; p.z = point.position.z; p.intensity = point.intensity;
 //        std::cerr << "Dist before tf: " << sqrt(p.x * p.x + p.y * p.y + p.z * p.z) << std::endl;
@@ -84,6 +90,11 @@ pcl::PointXYZI Compensator::applyTransform(pcl::PointXYZI p, tf::Transform tf)
     pcl::PointXYZI ret;
     Eigen::Matrix3d rot;
     tf::matrixTFToEigen(tf.getBasis(), rot);
+
+//    std::cerr << "====================" << std::endl;
+//    std::cerr << "Rot: " << std::endl;
+//    std::cerr << rot << std::endl;
+
     Eigen::Vector3d trans;
     tf::vectorTFToEigen(tf.getOrigin(), trans);
     Eigen::Matrix4d mat = Eigen::Matrix4d::Identity();
@@ -95,6 +106,10 @@ pcl::PointXYZI Compensator::applyTransform(pcl::PointXYZI p, tf::Transform tf)
     /// Without this explicit cast Eigen will give a shit long error!!!
     Eigen::Affine3f a = affine.cast<float>();
     ret = pcl::transformPoint(p, a);
+//    print_tf(tf);
+//    std::cerr << "==========" << std::endl;
+//    std::cerr << a.matrix() << std::endl;
+//    std::cerr << "====================" << std::endl;
 //    ret = pcl::transformPoint(p, affine.cast<float>());
 
     return ret;
