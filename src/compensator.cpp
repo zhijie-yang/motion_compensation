@@ -69,6 +69,11 @@ void Compensator::onlineCompensate(const stamped_scan_msgs::Scan& _cloud, const 
         ret.push_back(_p);
 //        std::cerr << "Dist after tf : " << sqrt(_p.x * _p.x + _p.y * _p.y + _p.z * _p.z) << std::endl;
     }
+    auto point = _cloud.points.end();
+    tf::StampedTransform tf = Interpolator::interpolate(tf_expr, point->time_stamp);
+    std::cout << "Furthest tf: ";
+    print_tf(tf_strip_stamp(tf));
+
     std::cerr << "Num of zero translations: " << zero_count << std::endl;
     sensor_msgs::PointCloud2 cloud_msg;
     pcl::toROSMsg(ret, cloud_msg);
@@ -119,11 +124,11 @@ void point_cloud_callback (const stamped_scan_msgs::Scan &msg)
 {
 //    pointCloudBuf.push_back(pc);
 //    std::cerr << "In the callback" << std::endl;
-    int num_tf = 4;
+    int num_tf = TF_NUM;
     std::vector<tf::StampedTransform> tf_vec = queryTF(tfBuffer, msg.header.stamp, num_tf);
 //    std::cerr << "tf_vec length: " << tf_vec.size() << std::endl;
 //    std::cerr << "Querying TF completed" << std::endl;
-    if (tf_vec.size() < 2)
+    if (tf_vec.size() != TF_NUM)
     {
         return;
     }

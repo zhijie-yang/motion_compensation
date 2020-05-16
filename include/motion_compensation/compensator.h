@@ -13,8 +13,7 @@
 #include <stamped_scan_msgs/Scan.h>
 
 #define PI 3.14159265
-#define SCAN_RATE 10
-#define TF_RATE 10
+#define TF_NUM 2
 
 tf2_ros::Buffer tfBuffer;
 

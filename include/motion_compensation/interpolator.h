@@ -8,6 +8,13 @@
 #include <opencv2/opencv.hpp>
 #include <iostream>
 #include <vector>
+#include <tf/tf.h>
+#include <tf/transform_datatypes.h>
+
+#define SCAN_RATE 10
+#define TF_RATE 10
+
+tf::Quaternion Slerp(const tf::Quaternion & q0, const tf::Quaternion & q1, double t);
 
 class TransformExpr
 {
@@ -20,7 +27,7 @@ public:
     std::vector<std::vector<double>> translation_param;
     /// TODO: Decide what is the formula to express the rotation functions
     /// Suppose the rotation given in quaternion is a function w.r.t. time t in the third order
-    std::vector<std::vector<double>> rotation_param;
+    std::vector<tf::Quaternion> rotation_param;
 
 
     /** \brief Constructor of class TransformExpr given number of terms and coefficients
@@ -29,7 +36,7 @@ public:
      *	\param the coefficient matrix of rotation function
      *	\return an instance of class TransformExpr
      */
-    TransformExpr(int num_terms, ros::Time t, const std::vector<std::vector<double>>& translation_param, const std::vector<std::vector<double>>& rotation_param);
+    TransformExpr(int num_terms, ros::Time t, const std::vector<std::vector<double>>& translation_param, const std::vector<tf::Quaternion>& rotation_param);
 
     /** \brief Constructor of class TransformExpr given only the number of terms
      *	\param the number of terms in the polynomial equation
@@ -46,7 +53,7 @@ public:
 
     void setTranslationParam(const std::vector<std::vector<double>>& _translation_param);
 
-    void setRotationParam(const std::vector<std::vector<double>>& _rotation_param);
+    void setRotationParam(const std::vector<tf::Quaternion>& _rotation_param);
 
 
     /** \brief Calculates the coordinate at a specific time with the expression of transform function
@@ -55,6 +62,8 @@ public:
      *	\return the coordinate
      */
     std::vector<double> calcCoord(double expr_time) const;
+
+    tf::Quaternion quaternionInterpolation(const std::vector<tf::StampedTransform> &tf_vec);
 
 };
 

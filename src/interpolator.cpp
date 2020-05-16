@@ -22,15 +22,15 @@ Interpolator::interpolate(const TransformExpr &tf_expr, ros::Time _t)
     double y = coord[1];
     double z = coord[2];
     tf::Vector3 origin(x, y, z);
-//    std::cerr << "Calculated translation: " << std::endl;
-//    for (auto &i : coord)
-//    {
-//        std::cerr << i << " " << std::endl;
-//    }
     tf::StampedTransform tf;
     tf.setOrigin(origin);
+    tf::Quaternion q = tf::createIdentityQuaternion();
+    if (tf_expr.rotation_param.size() == 2)
+    {
+        q = Slerp(tf_expr.rotation_param[0], tf_expr.rotation_param[1], t);
+    }
 
-    tf.setRotation(tf::createIdentityQuaternion());
+    tf.setRotation(q);
 
     return tf;
     /// Calculate the transform from base to world at given time t
@@ -59,13 +59,22 @@ TransformExpr Interpolator::fitTrajectory(const std::vector<tf::StampedTransform
     translation_param_vec[0] = Interpolator::polyFit(x_points, tf_vec.size());
     translation_param_vec[1] = Interpolator::polyFit(y_points, tf_vec.size());
     translation_param_vec[2] = Interpolator::polyFit(z_points, tf_vec.size());
-    std::vector<std::vector<double>> rotation_param_vec;
     tf_expr.setTranslationParam(translation_param_vec);
+    std::vector<tf::Quaternion> rotation_param_vec;
+    for (auto & tf : tf_vec)
+    {
+        rotation_param_vec.push_back(tf.getRotation());
+    }
     return tf_expr;
 }
 
+tf::Quaternion TransformExpr::quaternionInterpolation(const std::vector<tf::StampedTransform> &tf_vec)
+{
+
+}
+
 TransformExpr::TransformExpr(int num_terms, ros::Time t, const std::vector<std::vector<double>> &translation_param,
-                             const std::vector<std::vector<double>> &rotation_param)
+                             const std::vector<tf::Quaternion> &rotation_param)
 {
     this->num_terms = num_terms;
     this->translation_param = translation_param;
@@ -134,7 +143,7 @@ void TransformExpr::setTranslationParam(const std::vector<std::vector<double>> &
     this->translation_param = _translation_param;
 }
 
-void TransformExpr::setRotationParam(const std::vector<std::vector<double>> &_rotation_param)
+void TransformExpr::setRotationParam(const std::vector<tf::Quaternion> &_rotation_param)
 {
     this->rotation_param = _rotation_param;
 }
@@ -154,4 +163,19 @@ std::vector<double> TransformExpr::calcCoord(double expr_time) const
         ret.push_back(_ret);
     }
     return ret;
+}
+
+tf::Quaternion Slerp(const tf::Quaternion & q0, const tf::Quaternion & q1, double t)
+{
+    double _t = t / ( 1.0 / TF_RATE);
+    if (_t > 1)
+    {
+        ROS_ERROR("Quaternion interpolation time exceeded upper bound, take 1.");
+        _t = 1;
+    }else if (_t < 0)
+    {
+        ROS_ERROR("Quaternion interpolation time exceeded lower bound, take 0.");
+        _t = 0;
+    }
+    return q0.slerp(q1, _t);
 }
