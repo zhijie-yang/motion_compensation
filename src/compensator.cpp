@@ -41,12 +41,19 @@ void Compensator::onlineCompensate(const stamped_scan_msgs::Scan& _cloud, const 
 
     local_world.setRotation(_tf_vec[0].getRotation());
 
-    local_world = Interpolator::interpolate(tf_expr, _cloud.header.stamp);
+    local_world = Interpolator::interpolate(tf_expr, _cloud.points[0].time_stamp);
     pcl::PointCloud<pcl::PointXYZI> ret;
+    std::cerr << "X params: ";
+    for (auto i : tf_expr.translation_param[0])
+    {
+        std::cerr << i << " ";
+    }
+    std::cerr << std::endl;
     std::cerr << "Iterating through all points" << std::endl;
     unsigned long zero_count = 0;
-    for (auto point : _cloud.points)
+    for (unsigned int i = 0; i < _cloud.points.size(); i += 1)
     {
+        stamped_scan_msgs::Point point = _cloud.points[i];
         tf::StampedTransform tf = Interpolator::interpolate(tf_expr, point.time_stamp);
         if (tf.getOrigin().getX() == 0 && tf.getOrigin().getY() == 0 && tf.getOrigin().getZ() == 0)
         {
@@ -69,10 +76,15 @@ void Compensator::onlineCompensate(const stamped_scan_msgs::Scan& _cloud, const 
         ret.push_back(_p);
 //        std::cerr << "Dist after tf : " << sqrt(_p.x * _p.x + _p.y * _p.y + _p.z * _p.z) << std::endl;
     }
-    auto point = _cloud.points.end();
-    tf::StampedTransform tf = Interpolator::interpolate(tf_expr, point->time_stamp);
-    std::cout << "Furthest tf: ";
+    auto point = _cloud.points[_cloud.points.size()-1];
+    std::cout << "Furthest point stamp: " << point.time_stamp.sec << " " << point.time_stamp.nsec << std::endl;
+    tf::StampedTransform tf = Interpolator::interpolate(tf_expr, point.time_stamp);
+    std::cout << "Local world: " << local_world.stamp_ << std::endl;
+    print_tf(tf_strip_stamp(local_world));
+    std::cout << "Furthest tf: " << tf.stamp_ << std::endl;
     print_tf(tf_strip_stamp(tf));
+    std::cout << "Furthest tf multi inversed local world: ";
+    print_tf(local_world.inverse() * tf_strip_stamp(tf));
 
     std::cerr << "Num of zero translations: " << zero_count << std::endl;
     sensor_msgs::PointCloud2 cloud_msg;

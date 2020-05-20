@@ -23,6 +23,7 @@ Interpolator::interpolate(const TransformExpr &tf_expr, ros::Time _t)
     double z = coord[2];
     tf::Vector3 origin(x, y, z);
     tf::StampedTransform tf;
+    tf.stamp_ = _t;
     tf.setOrigin(origin);
     tf::Quaternion q = tf::createIdentityQuaternion();
     if (tf_expr.rotation_param.size() == 2)
@@ -61,6 +62,7 @@ TransformExpr Interpolator::fitTrajectory(const std::vector<tf::StampedTransform
     translation_param_vec[2] = Interpolator::polyFit(z_points, tf_vec.size());
     tf_expr.setTranslationParam(translation_param_vec);
     std::vector<tf::Quaternion> rotation_param_vec;
+    rotation_param_vec.reserve(tf_vec.size());
     for (auto & tf : tf_vec)
     {
         rotation_param_vec.push_back(tf.getRotation());
@@ -115,7 +117,8 @@ std::vector<double> Interpolator::polyFit(std::vector<cv::Point2d> &in_point, in
     mat_k = (mat_u.t() * mat_u).inv() * mat_u.t() * mat_y;
 //    std::cout << mat_k << std::endl;
     std::vector<double> ret;
-    for (int i = 0; i < mat_k.rows; i += 1)
+//    for (int i = 0; i < mat_k.rows; i += 1)
+    for (int i = mat_k.rows - 1; i >= 0; i -= 1)
     {
         double _param = mat_k.at<double>(i, 0);
         if (i == 0 && _param == 0)
@@ -151,10 +154,11 @@ void TransformExpr::setRotationParam(const std::vector<tf::Quaternion> &_rotatio
 std::vector<double> TransformExpr::calcCoord(double expr_time) const
 {
     std::vector<double> ret;
-    double _ret = 0;
     for (int dim = 0; dim < 3; dim += 1)
     {
+        double _ret = 0;
         for (int i = 0; i < this->translation_param[dim].size(); i += 1)
+//        for (unsigned long i = this->translation_param[dim].size() - 1; i >= 0; i -= 1 )
         {
             _ret += this->translation_param[dim][i] * pow(expr_time, i);
 //            std::cerr << "Translation param " << dim << ": " << this->translation_param[dim][i] << std::endl;
